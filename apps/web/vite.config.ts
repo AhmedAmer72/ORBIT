@@ -30,6 +30,10 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  build: {
+    outDir: path.resolve(root, "dist"),
+    emptyOutDir: true,
+  },
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
