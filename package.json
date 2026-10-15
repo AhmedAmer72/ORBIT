@@ -1,0 +1,29 @@
+{
+  "name": "arcbond",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/sdk",
+    "services/payments",
+    "services/guardian",
+    "services/paywall-example"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @arcbond/web",
+    "start": "npm run start -w @arcbond/web",
+    "build": "npm run build -w @arcbond/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:contracts": "node scripts/ensure-libs.mjs && node scripts/forge.mjs test",
+    "test:contracts:fork": "node scripts/ensure-libs.mjs && node scripts/forge.mjs test --match-contract ArcUsdcForkTest --fork-url https://rpc.testnet.arc.io",
+    "agent:pay": "tsx scripts/agent-pay.ts",
+    "pay:api": "tsx services/payments/src/server.ts",
+    "pay:agent": "tsx scripts/pay-per-api.ts",
+    "guardian": "tsx services/guardian/src/server.ts",
+    "paywall:example": "tsx services/paywall-example/src/server.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}

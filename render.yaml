@@ -1,0 +1,49 @@
+# Backend services only. The website is deployed on Vercel from the repository root.
+# Set every sync:false variable in the Render dashboard. Do not commit those values.
+services:
+  - type: web
+    name: orbit-payments
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npx tsx services/payments/src/server.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PAY_API_HOST
+        value: 0.0.0.0
+      - key: PAY_CHAIN_ID
+        value: "5042"
+      - key: PAY_RPC_URL
+        value: https://rpc.mainnet.arc.io
+      - key: PAY_FACTORY_ADDRESS
+        value: "0xA9Cdb36A8c1E20755AE294eff6978525A1f01a1d"
+      - key: PAY_START_BLOCK
+        value: "26000245"
+      - key: PAY_PROVIDER_RECIPIENT
+        sync: false
+      - key: PAY_RELAYER_PRIVATE_KEY
+        sync: false
+      - key: PAY_RELAY_MAX_NATIVE
+        sync: false
+  - type: web
+    name: orbit-guardian
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npx tsx services/guardian/src/server.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: GUARDIAN_HOST
+        value: 0.0.0.0
+      - key: GUARDIAN_CHAIN_ID
+        value: "5042"
+      - key: GUARDIAN_RPC_URL
+        value: https://rpc.mainnet.arc.io
+      - key: GUARDIAN_FROM_BLOCK
+        value: "26000255"
+      - key: GUARDIAN_WORKSPACES
+        sync: false
