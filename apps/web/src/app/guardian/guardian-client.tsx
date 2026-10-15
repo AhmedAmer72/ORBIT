@@ -16,6 +16,8 @@ const paymentEvent = parseAbiItem(
 
 const watched = [arcTestnetFactoryV2.proofVault, arcTestnetWorkspaceFactory.smokeWorkspace] as const;
 
+const networkLabel = configuredChain.id === 5042002 ? "Arc Testnet" : "Arc mainnet";
+
 export function GuardianClient() {
   const publicClient = usePublicClient({ chainId: configuredChain.id });
   const [status, setStatus] = useState("Not read yet. An empty list before a read is not a clean bill of health.");
@@ -30,7 +32,7 @@ export function GuardianClient() {
     }
     if (configuredChain.id !== 5042002) {
       setAlerts([]);
-      setStatus(`${configuredChain.name} is connected. There is no sample vault on this chain yet. Create one before expecting payment alerts. This is not a clean bill of health.`);
+      setStatus(`${networkLabel} is connected. There is no sample vault on this chain yet. Create one before expecting payment alerts. This is not a clean bill of health.`);
       return;
     }
     setBusy(true);
@@ -73,11 +75,11 @@ export function GuardianClient() {
       const next = evaluateGuardian(facts, now);
       setAlerts(next);
       setStatus(
-        `Read Arc Testnet block ${latest.toString()} from ${fromBlock.toString()}. Found ${facts.filter((fact) => fact.kind === "payment").length} payment logs. Vault balance ${formatUsdc(vault.balance)} USDC. These signals are not fraud findings.`,
+        `Read ${networkLabel} block ${latest.toString()} from ${fromBlock.toString()}. Found ${facts.filter((fact) => fact.kind === "payment").length} payment logs. Vault balance ${formatUsdc(vault.balance)} USDC. These signals are not fraud findings.`,
       );
     } catch (error) {
       setAlerts([]);
-      setStatus(error instanceof Error ? error.message : "Arc Testnet could not be read.");
+      setStatus(error instanceof Error ? error.message : `${networkLabel} could not be read.`);
     } finally {
       setBusy(false);
     }
@@ -86,12 +88,12 @@ export function GuardianClient() {
   return (
     <div className="space-y-6">
       <PageIntro title="Policy guardian">
-        This page reads Arc Testnet directly. It does not use a local server. Pause and revoke still require the owner wallet.
+        This page reads {networkLabel} directly. It does not use a local server. Pause and revoke still require the owner wallet.
       </PageIntro>
       <Surface>
         <p className="text-sm text-muted">{status}</p>
         <button type="button" className="btn btn-solid mt-3" disabled={busy} onClick={() => void readChain()}>
-          {busy ? "Reading Arc Testnet…" : "Read Arc Testnet"}
+          {busy ? `Reading ${networkLabel}…` : `Read ${networkLabel}`}
         </button>
       </Surface>
       {alerts.length === 0 ? (

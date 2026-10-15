@@ -65,6 +65,8 @@ function intentBody(intent: PaymentIntent) {
   };
 }
 
+const networkLabel = configuredChain.id === 5042002 ? "Arc Testnet" : "Arc mainnet";
+
 export function PayClient() {
   const payUrl = appConfig.payApiUrl?.replace(/\/$/, "");
   const { address } = useAccount();
@@ -73,7 +75,7 @@ export function PayClient() {
   const [health, setHealth] = useState<Health | null>(null);
   const [vault, setVault] = useState<string>(configuredChain.id === 5042002 ? arcTestnetFactoryV2.proofVault : "");
   const [recipient, setRecipient] = useState(configuredChain.id === 5042002 ? arcTestnetFactoryV2.proofRecipient : "");
-  const [record, setRecord] = useState<"testnet" | "mainnet">("testnet");
+  const [record, setRecord] = useState<"testnet" | "mainnet">(configuredChain.id === 5042002 ? "testnet" : "mainnet");
   const [quote, setQuote] = useState<Quote | null>(null);
   const [relay, setRelay] = useState<Relay | null>(null);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
@@ -98,7 +100,7 @@ export function PayClient() {
 
   async function settleOnTestnet() {
     if (!publicClient || !walletClient || !address) {
-      setError("Connect the vault's agent wallet on Arc Testnet.");
+      setError(`Connect the vault's agent wallet on ${networkLabel}.`);
       return;
     }
     if (!vault || !recipient.startsWith("0x")) {
@@ -110,7 +112,7 @@ export function PayClient() {
     setRelay(null);
     setDelivery(null);
     try {
-      const paymentId = paymentIdFromLabel(`testnet-pay-${Date.now()}`);
+      const paymentId = paymentIdFromLabel(`agent-pay-${Date.now()}`);
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 10 * 60);
       const intent = await createPaymentIntent(publicClient, {
         vault: vault as `0x${string}`,
@@ -135,7 +137,7 @@ export function PayClient() {
         data: encodeExecutePaymentIntent(signed.intent, signed.signature),
       });
       if (submitted.kind !== "success") {
-        throw new Error("message" in submitted ? submitted.message : "Arc Testnet did not confirm the payment.");
+        throw new Error("message" in submitted ? submitted.message : `${networkLabel} did not confirm the payment.`);
       }
       const receipt = await publicClient.getTransactionReceipt({ hash: submitted.hash });
       const settlement = await verifyPaywallSettlement(
@@ -157,14 +159,14 @@ export function PayClient() {
       setRelay({
         status: "confirmed",
         transactionHash: settlement.transactionHash,
-        message: `Submitted by the connected agent on ${configuredChain.name}.`,
+        message: `Submitted by the connected agent on ${networkLabel}.`,
         paymentSettled: true,
         digest: signed.digest,
       });
       setDelivery({
         delivered: true,
         record: {
-          name: configuredChain.name,
+          name: networkLabel,
           chainId: configuredChain.id,
           rpcUrl: appConfig.rpcUrl,
           usdc: appConfig.usdc,
@@ -172,7 +174,7 @@ export function PayClient() {
         payment: { transactionHash: settlement.transactionHash, amount: "500000" },
       });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The testnet payment failed.");
+      setError(cause instanceof Error ? cause.message : `The ${networkLabel} payment failed.`);
     } finally {
       setBusy(false);
     }
@@ -271,13 +273,13 @@ export function PayClient() {
   return (
     <div className="space-y-6">
       <PageIntro title="Pay per API">
-        The agent signs an exact USDC intent and submits it on Arc Testnet. The record appears only after this page reads
+        The agent signs an exact USDC intent and submits it on {networkLabel}. The record appears only after this page reads
         the vault log. A signature or a transaction hash by itself is not delivery.
       </PageIntro>
 
       <Surface>
         <p className="text-sm leading-6 text-muted">
-          Settle 0.50 USDC on {configuredChain.name} from the connected agent. Enter a vault from the factory on this chain
+          Settle 0.50 USDC on {networkLabel} from the connected agent. Enter a vault from the factory on this chain
           and a recipient that vault has approved. The record appears only after this page reads the vault log.
         </p>
         <label className="mt-4 grid gap-1 text-sm">
@@ -285,7 +287,7 @@ export function PayClient() {
           <input className="rounded-xl border border-line bg-ink px-3 py-2 font-mono text-xs" value={recipient} onChange={(event) => setRecipient(event.target.value)} spellCheck={false} />
         </label>
         <button className="btn btn-solid mt-4" type="button" disabled={busy || !address} onClick={() => void settleOnTestnet()}>
-          {busy ? "Sending to Arc Testnet…" : "Settle on Arc Testnet"}
+          {busy ? `Sending to ${networkLabel}…` : `Settle on ${networkLabel}`}
         </button>
       </Surface>
       {!payUrl ? null : (
