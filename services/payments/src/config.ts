@@ -20,7 +20,8 @@ const KNOWN_TESTNET_ONLY_DEPLOYMENTS = new Set([
 export type PayConfig = {
   chainId: number;
   rpcUrl: string;
-  recipient: Address;
+  /** Optional default. A quote can name any recipient the vault has already approved. */
+  recipient?: Address;
   relayerKey?: Hex;
   factory?: Address;
   port: number;
@@ -77,9 +78,6 @@ export function payConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PayConfi
     throw new PayError(500, "invalid_config", "PAY_CHAIN_ID must be Arc Testnet 5042002 or Arc mainnet 5042.");
   }
   const recipient = addressFrom(env.PAY_PROVIDER_RECIPIENT, "PAY_PROVIDER_RECIPIENT");
-  if (!recipient) {
-    throw new PayError(500, "invalid_config", "PAY_PROVIDER_RECIPIENT is required. It is the USDC address the vault pays.");
-  }
   const relayerRaw = env.PAY_RELAYER_PRIVATE_KEY;
   if (relayerRaw && !/^0x[0-9a-fA-F]{64}$/.test(relayerRaw)) {
     throw new PayError(500, "invalid_config", "PAY_RELAYER_PRIVATE_KEY must be a 32-byte hex key.");
@@ -104,8 +102,8 @@ export function payConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PayConfi
     recipient,
     relayerKey: relayerRaw as Hex | undefined,
     factory,
-    port: Number(env.PORT ?? env.PAY_API_PORT ?? 8787),
-    host: env.PAY_API_HOST ?? (env.PORT ? "0.0.0.0" : "127.0.0.1"),
+    port: Number(env.PORT) || Number(env.PAY_API_PORT) || 8787,
+    host: env.PORT ? "0.0.0.0" : (env.PAY_API_HOST ?? "127.0.0.1"),
     quoteTtlSeconds: Number(env.PAY_QUOTE_TTL_SECONDS ?? DEFAULT_QUOTE_TTL_SECONDS),
     price: SERVICE_PRICE,
     token: USDC_ADDRESS,

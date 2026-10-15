@@ -1,4 +1,4 @@
-import { factoryAbi, formatUsdc, paymentIdFromLabel, readFactoryVersion, USDC_ADDRESS } from "@arcbond/sdk";
+import { factoryAbi, formatUsdc, paymentIdFromLabel, readFactoryVersion, USDC_ADDRESS, vaultAbi } from "@arcbond/sdk";
 import { getAddress, isAddress, type Address, type PublicClient } from "viem";
 
 import type { PayConfig } from "./config";
@@ -43,7 +43,7 @@ export async function createQuote(
   db: PaymentsDb,
   config: PayConfig,
   publicClient: PublicClient,
-  input: { vault?: unknown; record?: unknown },
+  input: { vault?: unknown; record?: unknown; recipient?: unknown },
 ): Promise<QuoteResponse> {
   if (!isRecordKey(input.record)) {
     throw new PayError(400, "invalid_request", "record must be testnet or mainnet.");
@@ -72,13 +72,32 @@ export async function createQuote(
     }
   }
 
+  const requested =
+    typeof input.recipient === "string" && isAddress(input.recipient) ? getAddress(input.recipient) : config.recipient;
+  if (!requested) {
+    throw new PayError(
+      400,
+      "invalid_request",
+      "recipient is required. Pass the address that should receive the USDC. The vault owner must already have approved it.",
+    );
+  }
+  const approved = await publicClient.readContract({
+    address: vault,
+    abi: vaultAbi,
+    functionName: "approvedRecipients",
+    args: [requested],
+  });
+  if (!approved) {
+    throw new PayError(400, "recipient_not_approved", "That recipient is not on this vault's allowlist.");
+  }
+
   const now = Math.floor(Date.now() / 1000);
   const quoteId = crypto.randomUUID();
   const row: QuoteRow = {
     id: quoteId,
     record_key: input.record,
     vault,
-    recipient: config.recipient,
+    recipient: requested,
     token: USDC_ADDRESS,
     amount: config.price.toString(),
     payment_id: paymentIdFromLabel(`arcbond.quote.${quoteId}`),

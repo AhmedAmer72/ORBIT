@@ -1,6 +1,41 @@
-# Backend services only. The website is deployed on Vercel from the repository root.
 # Set every sync:false variable in the Render dashboard. Do not commit those values.
+# The website can live on Vercel (see README) or on Render as orbit-web below.
 services:
+  - type: web
+    name: orbit-web
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      # Mirror Vercel public env vars in the Render dashboard for production.
+      - key: NEXT_PUBLIC_ARC_CHAIN_ID
+        value: "5042"
+      - key: NEXT_PUBLIC_ARC_RPC_URL
+        value: https://rpc.mainnet.arc.io
+      - key: NEXT_PUBLIC_ARC_EXPLORER_URL
+        value: https://explorer.arc.io
+      - key: NEXT_PUBLIC_USDC_ADDRESS
+        value: "0x3600000000000000000000000000000000000000"
+      - key: NEXT_PUBLIC_FACTORY_ADDRESS
+        value: "0xA9Cdb36A8c1E20755AE294eff6978525A1f01a1d"
+      - key: NEXT_PUBLIC_FACTORY_DEPLOY_BLOCK
+        value: "26000245"
+      - key: NEXT_PUBLIC_WORKSPACE_FACTORY_ADDRESS
+        value: "0x8fb1a3cff48ec873ef0526a902425813979c7b9e"
+      - key: NEXT_PUBLIC_WORKSPACE_DEPLOY_BLOCK
+        value: "26000255"
+      - key: NEXT_PUBLIC_PRIVY_APP_ID
+        sync: false
+      - key: NEXT_PUBLIC_PAY_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_GUARDIAN_URL
+        sync: false
   - type: web
     name: orbit-payments
     runtime: node
@@ -21,6 +56,7 @@ services:
         value: "0xA9Cdb36A8c1E20755AE294eff6978525A1f01a1d"
       - key: PAY_START_BLOCK
         value: "26000245"
+      # Optional default recipient. Leave unset so each quote names its own, checked against the vault allowlist.
       - key: PAY_PROVIDER_RECIPIENT
         sync: false
       - key: PAY_RELAYER_PRIVATE_KEY

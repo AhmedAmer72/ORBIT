@@ -216,6 +216,14 @@ export async function preflightPaymentIntent(
       message: "Preflight passed. The contract must still verify the signature and the current policy at execution.",
     };
   }
+  if (simulation.rpcLimited) {
+    return {
+      advisory: true,
+      status: "unavailable",
+      source: "simulation",
+      message: simulation.message,
+    };
+  }
   return {
     advisory: true,
     status: "simulation_reverted",

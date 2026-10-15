@@ -89,7 +89,7 @@ export function createHandler(deps: HttpDeps) {
           price: SERVICE_PRICE.toString(),
           priceDisplay: formatUsdc(SERVICE_PRICE),
           chainId: deps.config.chainId,
-          recipient: deps.config.recipient,
+          recipient: deps.config.recipient ?? null,
           factory: deps.config.factory ?? null,
           factoryVersion: deployment.version?.toString() ?? null,
           paymentIntents: deployment.supportsPaymentIntents,

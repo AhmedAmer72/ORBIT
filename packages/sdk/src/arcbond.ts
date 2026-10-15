@@ -101,7 +101,10 @@ export function createArcBondClient(config: {
         data,
       });
       if (!preview.ok) {
-        throw new ArcBondError("simulation_reverted", preview.errorName ?? preview.message);
+        throw new ArcBondError(
+          preview.rpcLimited ? "rpc" : "simulation_reverted",
+          preview.rpcLimited ? preview.message : (preview.errorName ?? preview.message),
+        );
       }
       onPhase?.({ status: "simulated" });
       onPhase?.({ status: "awaiting_signature" });
@@ -159,7 +162,10 @@ export function createArcBondClient(config: {
         data,
       });
       if (!preview.ok) {
-        throw new ArcBondError("simulation_reverted", preview.errorName ?? preview.message);
+        throw new ArcBondError(
+          preview.rpcLimited ? "rpc" : "simulation_reverted",
+          preview.rpcLimited ? preview.message : (preview.errorName ?? preview.message),
+        );
       }
       onPhase?.({ status: "simulated" });
       onPhase?.({ status: "awaiting_signature" });

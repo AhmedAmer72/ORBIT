@@ -8,7 +8,7 @@ import { ConfigMissing } from "@/components/ConfigMissing";
 import { EmptyState } from "@/components/EmptyState";
 import { TxStatus } from "@/components/TxStatus";
 import { Field, PageIntro, Surface, TextInput } from "@/components/ui";
-import { VaultPicker } from "@/components/VaultPicker";
+import { OpenVaultByAddress, VaultPicker } from "@/components/VaultPicker";
 import { WriteButton } from "@/components/WriteButton";
 import { useActiveVault, useRecipientApproved } from "@/hooks/useArcBond";
 import { useTxWriter } from "@/hooks/useTx";
@@ -37,8 +37,9 @@ export function PolicyClient() {
     return (
       <div className="space-y-6">
         <PageIntro title="Policy">The period cap resets at 00:00 UTC.</PageIntro>
-        <EmptyState title="Select a vault">
-          <p>Create or open a vault first. Policy is stored on that vault.</p>
+        <EmptyState title="No vault is open">
+          <p>Policy is stored on a vault. Owners see vaults they created. An agent can paste the vault address, but only the owner can change policy.</p>
+          <OpenVaultByAddress />
         </EmptyState>
       </div>
     );
@@ -101,6 +102,7 @@ export function PolicyClient() {
           <WriteButton type="submit" disabledReason={!isOwner ? "Only the owner can update policy." : writer.writeDisabledReason}>
             Save policy
           </WriteButton>
+          <p className="text-sm text-muted">Saving the caps and expiry does not approve a recipient. That is the separate transaction below.</p>
         </Surface>
       </form>
       <Surface className="space-y-3">

@@ -1,7 +1,7 @@
 "use client";
 
-import { formatUsdc, parseUsdc, paymentIdFromLabel, workspaceAbi } from "@arcbond/sdk";
-import { useState } from "react";
+import { formatUsdc, parseUsdc, paymentIdFromLabel, workspaceAbi, workspaceFactoryAbi } from "@arcbond/sdk";
+import { useEffect, useState } from "react";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { useReadContract } from "wagmi";
 
@@ -10,11 +10,24 @@ import { TxStatus } from "@/components/TxStatus";
 import { Field, PageIntro, Surface, TextInput } from "@/components/ui";
 import { WriteButton } from "@/components/WriteButton";
 import { useTxWriter } from "@/hooks/useTx";
+import { appConfig } from "@/lib/config";
 import { configuredChain } from "@/lib/wagmi";
 
 export function SessionsClient() {
   const writer = useTxWriter();
+  const { data: workspaces } = useReadContract({
+    chainId: configuredChain.id,
+    address: appConfig.workspaceFactory,
+    abi: workspaceFactoryAbi,
+    functionName: "workspacesOf",
+    args: writer.address ? [writer.address] : undefined,
+    query: { enabled: Boolean(appConfig.workspaceFactory && writer.address) },
+  });
   const [workspace, setWorkspace] = useState("");
+  useEffect(() => {
+    if (workspace || !workspaces?.length) return;
+    setWorkspace(workspaces[0]);
+  }, [workspace, workspaces]);
   const [sessionLabel, setSessionLabel] = useState("session-1");
   const [agent, setAgent] = useState("");
   const [provider, setProvider] = useState("");
@@ -54,8 +67,25 @@ export function SessionsClient() {
       </PageIntro>
       <Surface className="space-y-4">
         <Field label="Workspace">
-          <TextInput className="font-mono" value={workspace} onChange={(event) => setWorkspace(event.target.value)} />
+          {workspaces?.length ? (
+            <select
+              className="mt-2 w-full rounded-xl border border-line bg-ink/80 px-3 py-2.5 font-mono text-sm"
+              value={workspace}
+              onChange={(event) => setWorkspace(event.target.value)}
+            >
+              {workspaces.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <TextInput className="font-mono" value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="Paste the workspace address" spellCheck={false} />
+          )}
         </Field>
+        {!workspaces?.length ? (
+          <p className="text-sm text-muted">This wallet has no workspace yet. Create one on Workspaces, or paste an address the owner shared.</p>
+        ) : null}
         <Field label="Session label">
           <TextInput value={sessionLabel} onChange={(event) => setSessionLabel(event.target.value)} />
         </Field>

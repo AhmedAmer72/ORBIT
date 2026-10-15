@@ -98,7 +98,7 @@ function useUsdcBalance(address: Address | undefined) {
     abi: erc20Abi,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
-    query: { enabled: Boolean(address) },
+    query: { enabled: Boolean(address), staleTime: 20_000, refetchInterval: 20_000 },
   });
   return data;
 }

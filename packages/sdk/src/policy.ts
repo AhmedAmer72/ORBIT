@@ -149,6 +149,15 @@ export async function preflightPayment(
           : `The simulated call succeeded, while the local check reported ${local.errorName}. Use the simulation for this block. The contract checks again at execution.`,
       };
     }
+    if (simulation.rpcLimited) {
+      return {
+        advisory: true,
+        status: "unavailable",
+        source: "simulation",
+        localErrorName,
+        message: simulation.message,
+      };
+    }
     const errorName = simulation.errorName ?? localErrorName;
     return {
       advisory: true,

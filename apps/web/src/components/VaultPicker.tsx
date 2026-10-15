@@ -1,10 +1,49 @@
 "use client";
 
-import { Link, useLocation } from "react-router-dom";
-
+import { useState } from "react";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { isAddress } from "viem";
 import { useAccount } from "wagmi";
 
+import { Field, TextInput } from "@/components/ui";
 import { useOwnedVaults, useSelectedVaultAddress } from "@/hooks/useArcBond";
+
+export function OpenVaultByAddress() {
+  const [params, setParams] = useSearchParams();
+  const [value, setValue] = useState("");
+  const ready = isAddress(value);
+
+  return (
+    <form
+      className="mt-4 space-y-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!ready) return;
+        const next = new URLSearchParams(params);
+        next.set("vault", value);
+        setParams(next);
+      }}
+    >
+      <Field label="Vault address">
+        <TextInput
+          className="font-mono"
+          value={value}
+          placeholder="0x"
+          spellCheck={false}
+          onChange={(event) => setValue(event.target.value.trim())}
+        />
+      </Field>
+      <button type="submit" className="btn btn-solid" disabled={!ready}>
+        Open vault
+      </button>
+      <p className="text-sm text-muted">
+        {ready
+          ? "This opens that vault for the connected wallet. It does not change the owner or the agent."
+          : "Open vault stays off until this is the full vault contract address from the owner, not a wallet address."}
+      </p>
+    </form>
+  );
+}
 
 export function VaultPicker() {
   const { pathname } = useLocation();
@@ -15,7 +54,14 @@ export function VaultPicker() {
   if (!address) return <p className="text-sm text-muted">Connect a wallet to read its vaults.</p>;
   if (isLoading) return <p className="text-sm text-muted">Reading vaults from the factory…</p>;
   if (error) return <p className="text-sm text-danger">Could not read factory.vaultsOf: {error.message}</p>;
-  if (!data?.length) return <p className="text-sm text-muted">This wallet has no factory vaults yet.</p>;
+  if (!data?.length) {
+    return (
+      <p className="text-sm text-muted">
+        This wallet has not created a vault, and no authorization for it was found in the latest 10,000 blocks. Paste the
+        vault address if this wallet is the agent.
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-wrap gap-2">

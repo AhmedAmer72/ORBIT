@@ -1,4 +1,4 @@
-import { formatUsdc, vaultAbi } from "@arcbond/sdk";
+import { formatUsdc, isRpcRateLimit, RPC_RATE_LIMIT_MESSAGE, vaultAbi } from "@arcbond/sdk";
 import type { AbiEvent, Address, Hash, PublicClient } from "viem";
 
 import { logBlockRanges, MAX_LOG_BLOCK_SPAN } from "./log-ranges";
@@ -49,9 +49,10 @@ async function readRange(publicClient: PublicClient, vault: Address, fromBlock: 
       toBlock,
     })) as ActivitySource[];
   } catch (error) {
+    if (isRpcRateLimit(error)) throw new Error(RPC_RATE_LIMIT_MESSAGE);
     const span = toBlock - fromBlock + 1n;
     const message = error instanceof Error ? error.message : "";
-    if (span <= 1n || !/range too large/i.test(message)) throw error;
+    if (span <= 1n || !/range too large|exceeds defined limit/i.test(message)) throw error;
     const mid = fromBlock + span / 2n - 1n;
     const leftEnd = mid < fromBlock ? fromBlock : mid;
     const rightStart = leftEnd + 1n;

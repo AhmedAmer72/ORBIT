@@ -120,13 +120,27 @@ In the Vercel project settings, add these environment variables before the first
 
 Add the Vercel domain to the Privy app's allowed origins. Injected wallets work without Privy.
 
+## Deploy the website on Render (optional)
+
+If you use Render instead of Vercel, create a **Web Service** (not a static site) at the **repository root**. Render must run a process that binds to `PORT` on `0.0.0.0`.
+
+| Setting | Value |
+| --- | --- |
+| Root directory | repository root (not `apps/web`) |
+| Build command | `npm install && npm run build` |
+| Start command | `npm start` |
+
+`npm start` runs [`scripts/serve-dist.mjs`](scripts/serve-dist.mjs), which serves the built `dist/` folder. If the start command is missing, or only the build runs again at deploy time, Render reports **Port scan timeout** even when the Vite build succeeded.
+
+Use the same public `NEXT_PUBLIC_*` variables as Vercel. [`render.yaml`](render.yaml) includes an `orbit-web` service with these commands.
+
 ## Deploy the APIs on Render
 
 [`render.yaml`](render.yaml) describes two Node web services. Render injects `PORT`. The payments process listens on `0.0.0.0` when `PORT` is set. The same is true for guardian.
 
 Create the services from the blueprint, then set the secret fields in the Render dashboard:
 
-- `PAY_PROVIDER_RECIPIENT`: the address that should receive pay-per-API USDC.
+- `PAY_PROVIDER_RECIPIENT`: optional. Leave it unset. Each quote names the recipient, and the vault allowlist decides whether that address can be paid.
 - `PAY_RELAYER_PRIVATE_KEY`: a dedicated relayer key. It must not be the owner key or the agent key.
 - `PAY_RELAY_MAX_NATIVE`: a wei cap on native gas the relayer may spend. The mainnet process refuses to start a relayer without this cap.
 - `GUARDIAN_WORKSPACES`: comma-separated workspace addresses to index. Leave it empty until a workspace exists.

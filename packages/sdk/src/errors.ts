@@ -60,6 +60,25 @@ export function decodeVaultError(data: Hex | undefined): string | undefined {
   }
 }
 
+export const RPC_RATE_LIMIT_MESSAGE =
+  "The Arc RPC rate-limited this request. Wait a few seconds and try again. The vault did not reject the call.";
+
+export function isRpcRateLimit(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const record = current as { status?: unknown; message?: unknown; details?: unknown; shortMessage?: unknown };
+    if (record.status === 429) return true;
+    const message = [record.message, record.details, record.shortMessage]
+      .filter((part) => part !== undefined && part !== null)
+      .join(" ");
+    if (/\b429\b|too many requests|rate limit/i.test(message)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return typeof error === "string" && /\b429\b|too many requests|rate limit/i.test(error);
+}
+
 export function revertDataFromError(error: unknown): Hex | undefined {
   const seen = new Set<unknown>();
   let current: unknown = error;
@@ -73,6 +92,9 @@ export function revertDataFromError(error: unknown): Hex | undefined {
 }
 
 export function describeWriteFailure(error: unknown): { kind: "rejection" | "error"; message: string } {
+  if (isRpcRateLimit(error)) {
+    return { kind: "error", message: RPC_RATE_LIMIT_MESSAGE };
+  }
   const raw =
     error instanceof Error
       ? error.message

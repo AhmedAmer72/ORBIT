@@ -8,7 +8,7 @@ import {
 
 import { erc20Abi, factoryAbi, vaultAbi } from "./abi";
 import { USDC_ADDRESS } from "./constants";
-import { decodeVaultError, revertDataFromError } from "./errors";
+import { decodeVaultError, isRpcRateLimit, revertDataFromError, RPC_RATE_LIMIT_MESSAGE } from "./errors";
 import { floorMaxFeePerGas } from "./fees";
 
 export type ArcBondClients = {
@@ -72,20 +72,36 @@ export async function simulateVaultCall(args: {
   account: Address;
   vault: Address;
   data: Hex;
-}): Promise<{ ok: true } | { ok: false; errorName?: string; message: string }> {
-  try {
-    await args.publicClient.call({
+}): Promise<{ ok: true } | { ok: false; errorName?: string; message: string; rpcLimited?: boolean }> {
+  const run = () =>
+    args.publicClient.call({
       account: args.account,
       to: args.vault,
       data: args.data,
     });
+
+  try {
+    await run();
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    let failure = error;
+    if (isRpcRateLimit(failure)) {
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      try {
+        await run();
+        return { ok: true };
+      } catch (retryError) {
+        if (isRpcRateLimit(retryError)) {
+          return { ok: false, rpcLimited: true, message: RPC_RATE_LIMIT_MESSAGE };
+        }
+        failure = retryError;
+      }
+    }
+    const message = failure instanceof Error ? failure.message : String(failure);
     const match = message.match(/0x[0-9a-fA-F]+/);
     return {
       ok: false,
-      errorName: decodeVaultError(revertDataFromError(error) ?? (match ? (match[0] as Hex) : undefined)),
+      errorName: decodeVaultError(revertDataFromError(failure) ?? (match ? (match[0] as Hex) : undefined)),
       message,
     };
   }

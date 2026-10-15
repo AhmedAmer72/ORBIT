@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import { Providers } from "@/app/providers";
+import { DialogProvider } from "@/components/AppDialog";
 import { AppRoutes } from "@/router";
 import "./index.css";
 
@@ -12,9 +13,11 @@ if (!root) throw new Error("Root element missing");
 createRoot(root).render(
   <StrictMode>
     <Providers>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <DialogProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </DialogProvider>
     </Providers>
   </StrictMode>,
 );

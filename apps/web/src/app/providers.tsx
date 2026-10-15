@@ -11,7 +11,19 @@ import { privyConfig } from "@/lib/privy";
 import { wagmiConfig } from "@/lib/wagmi";
 
 export function Providers({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 20_000,
+            refetchOnWindowFocus: false,
+            retry: 1,
+            retryDelay: 1_500,
+          },
+        },
+      }),
+  );
 
   if (!appConfig.privyAppId) {
     return (

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { vaultAbi } from "../src/abi.js";
 import { ARC_MAINNET_CHAIN_ID } from "../src/constants.js";
-import { decodeVaultError, describeWriteFailure } from "../src/errors.js";
+import { decodeVaultError, describeWriteFailure, isRpcRateLimit } from "../src/errors.js";
 import { floorMaxFeePerGas } from "../src/fees.js";
 import { formatUsdc, isUsdcAddress, parseUsdc } from "../src/format.js";
 import { isConfiguredChain } from "../src/chain.js";
@@ -28,6 +28,15 @@ describe("errors", () => {
     const data = encodeErrorResult({ abi: vaultAbi, errorName: "AmountExceedsLimit" });
     expect(decodeVaultError(data)).toBe("AmountExceedsLimit");
     expect(describeWriteFailure({ message: data }).kind).toBe("rejection");
+  });
+
+  it("does not treat an RPC 429 as a vault revert", () => {
+    const error = Object.assign(new Error("HTTP request failed. Status: 429"), { status: 429 });
+    expect(isRpcRateLimit(error)).toBe(true);
+    expect(describeWriteFailure(error)).toEqual({
+      kind: "error",
+      message: "The Arc RPC rate-limited this request. Wait a few seconds and try again. The vault did not reject the call.",
+    });
   });
 });
 

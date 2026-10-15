@@ -4,6 +4,7 @@ import { arcTestnetFactoryV2, encodeExecutePayment, formatUsdc, parseUsdc, payme
 import { useState } from "react";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 
+import { useConfirm } from "@/components/AppDialog";
 import { submitPreparedWrite } from "@/lib/tx";
 import { configuredChain } from "@/lib/wagmi";
 
@@ -14,6 +15,7 @@ export function PolicyDemo() {
   const publicClient = usePublicClient({ chainId: configuredChain.id });
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const confirm = useConfirm();
   const [amount, setAmount] = useState("0.50");
   const [status, setStatus] = useState<string>("Not checked yet.");
   const [ok, setOk] = useState<boolean | null>(null);
@@ -53,7 +55,12 @@ export function PolicyDemo() {
 
   async function sendOnTestnet() {
     if (!publicClient || !walletClient || !address) return;
-    if (!window.confirm("Send this USDC payment on Arc Testnet from the connected agent?")) return;
+    const accepted = await confirm({
+      title: "Send payment",
+      body: "Send this USDC payment on Arc Testnet from the connected agent?",
+      confirmLabel: "Send payment",
+    });
+    if (!accepted) return;
     setBusy(true);
     setTx(null);
     try {

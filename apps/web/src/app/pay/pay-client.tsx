@@ -2,6 +2,7 @@ import {
   arcTestnetFactoryV2,
   createPaymentIntent,
   encodeExecutePaymentIntent,
+  isUsdcAddress,
   paymentIdFromLabel,
   signPaymentIntent,
   verifyPaywallSettlement,
@@ -10,7 +11,9 @@ import {
 import { useEffect, useState } from "react";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 
+import { useNotify } from "@/components/AppDialog";
 import { Field, PageIntro, Surface, TextInput } from "@/components/ui";
+import { useActiveVault } from "@/hooks/useArcBond";
 import { appConfig } from "@/lib/config";
 import { submitPreparedWrite } from "@/lib/tx";
 import { configuredChain } from "@/lib/wagmi";
@@ -70,6 +73,7 @@ const networkLabel = configuredChain.id === 5042002 ? "Arc Testnet" : "Arc mainn
 export function PayClient() {
   const payUrl = appConfig.payApiUrl?.replace(/\/$/, "");
   const { address } = useAccount();
+  const { vault: activeVault } = useActiveVault();
   const publicClient = usePublicClient({ chainId: configuredChain.id });
   const { data: walletClient } = useWalletClient();
   const [health, setHealth] = useState<Health | null>(null);
@@ -80,7 +84,17 @@ export function PayClient() {
   const [relay, setRelay] = useState<Relay | null>(null);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const notify = useNotify();
+  useEffect(() => {
+    if (!error) return;
+    notify({ title: "Payment", body: error, tone: "danger" });
+  }, [error, notify]);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!activeVault) return;
+    setVault((current) => (isUsdcAddress(current) ? current : activeVault));
+  }, [activeVault]);
 
   useEffect(() => {
     if (!payUrl) return;
@@ -103,8 +117,12 @@ export function PayClient() {
       setError(`Connect the vault's agent wallet on ${networkLabel}.`);
       return;
     }
-    if (!vault || !recipient.startsWith("0x")) {
-      setError("Enter the vault and the allowlisted recipient. This page will not invent them.");
+    if (!isUsdcAddress(vault)) {
+      setError("Enter the vault address from your Vaults page. This page does not invent one.");
+      return;
+    }
+    if (!isUsdcAddress(recipient)) {
+      setError("Enter the allowlisted recipient. This page does not invent one.");
       return;
     }
     setBusy(true);
@@ -182,6 +200,10 @@ export function PayClient() {
 
   async function quoteService() {
     if (!payUrl) return;
+    if (!isUsdcAddress(vault) || !isUsdcAddress(recipient)) {
+      setError("Enter the vault and the allowlisted recipient. The payments service does not keep a single recipient of its own.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setQuote(null);
@@ -191,7 +213,7 @@ export function PayClient() {
       const response = await fetch(`${payUrl}/provider/quotes`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ vault, record }),
+        body: JSON.stringify({ vault, recipient, record }),
       });
       const body = (await response.json()) as Quote & { message?: string };
       if (!response.ok) throw new Error(body.message ?? "The provider refused the quote.");
@@ -282,20 +304,25 @@ export function PayClient() {
           Settle 0.50 USDC on {networkLabel} from the connected agent. Enter a vault from the factory on this chain
           and a recipient that vault has approved. The record appears only after this page reads the vault log.
         </p>
-        <label className="mt-4 grid gap-1 text-sm">
-          Allowlisted recipient
-          <input className="rounded-xl border border-line bg-ink px-3 py-2 font-mono text-xs" value={recipient} onChange={(event) => setRecipient(event.target.value)} spellCheck={false} />
-        </label>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field label="Vault">
+            <TextInput className="font-mono" value={vault} onChange={(event) => setVault(event.target.value.trim())} placeholder="0x" spellCheck={false} />
+          </Field>
+          <Field label="Allowlisted recipient">
+            <TextInput className="font-mono" value={recipient} onChange={(event) => setRecipient(event.target.value.trim())} placeholder="0x" spellCheck={false} />
+          </Field>
+        </div>
         <button className="btn btn-solid mt-4" type="button" disabled={busy || !address} onClick={() => void settleOnTestnet()}>
           {busy ? `Sending to ${networkLabel}…` : `Settle on ${networkLabel}`}
         </button>
+        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
       </Surface>
       {!payUrl ? null : (
         <>
           <Surface>
             <p className="text-sm text-muted">
               {health?.ok === false
-                ? health.message
+                ? `${health.message ?? "The payments service is not reachable."} Settle on ${networkLabel} does not use it. Request quote, sign, and delivery do.`
                 : health
                   ? `Service price ${health.priceDisplay ?? "0.50"} USDC. Factory version ${health.factoryVersion ?? "unknown"}. Intents ${health.paymentIntents ? "available" : "unavailable"}. Relayer ${health.relayerConfigured ? "configured" : "missing"}.`
                   : "Checking the payments service."}
@@ -305,6 +332,9 @@ export function PayClient() {
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Vault">
                 <TextInput value={vault} onChange={(event) => setVault(event.target.value)} placeholder="0x" spellCheck={false} />
+              </Field>
+              <Field label="Allowlisted recipient">
+                <TextInput className="font-mono" value={recipient} onChange={(event) => setRecipient(event.target.value.trim())} placeholder="0x" spellCheck={false} />
               </Field>
               <Field label="Record">
                 <select className="mt-2 w-full rounded-xl border border-line bg-ink/80 px-3 py-2.5 text-sm" value={record} onChange={(event) => setRecord(event.target.value as "testnet" | "mainnet")}>

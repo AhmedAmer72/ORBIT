@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { encodeFunctionData, parseEventLogs } from "viem";
 import { usePublicClient, useWalletClient } from "wagmi";
 
+import { useConfirm } from "@/components/AppDialog";
 import { ConfigMissing } from "@/components/ConfigMissing";
 import { EmptyState } from "@/components/EmptyState";
 import { TxStatus } from "@/components/TxStatus";
@@ -21,6 +22,7 @@ import { submitPreparedWrite, type TxState } from "@/lib/tx";
 export function VaultsClient() {
   const { vault, owned, state, factoryConfigured } = useActiveVault();
   const writer = useTxWriter();
+  const confirm = useConfirm();
   const invalidate = useInvalidateVaultQueries();
   const navigate = useNavigate();
   const publicClient = usePublicClient({ chainId: configuredChain.id });
@@ -121,7 +123,14 @@ export function VaultsClient() {
               tone="ghost"
               disabledReason={!isOwner ? "Only the owner can withdraw." : writer.writeDisabledReason}
               onClick={() => {
-                if (window.confirm("Withdraw this USDC amount to the owner address?")) withdraw();
+                void confirm({
+                  title: "Withdraw USDC",
+                  body: "Withdraw this USDC amount to the owner address?",
+                  confirmLabel: "Withdraw",
+                  tone: "danger",
+                }).then((accepted) => {
+                  if (accepted) withdraw();
+                });
               }}
             >
               Withdraw

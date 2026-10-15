@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @arcbond/web",
-    "start": "npm run start -w @arcbond/web",
+    "start": "node scripts/serve-dist.mjs",
     "build": "npm run build -w @arcbond/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

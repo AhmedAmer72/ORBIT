@@ -27,6 +27,7 @@ export async function submitPreparedWrite(args: {
     data: args.data,
   });
   if (!preview.ok) {
+    if (preview.rpcLimited) return { kind: "error", message: preview.message };
     return { kind: "rejected", message: preview.errorName ?? "Simulation rejected the call." };
   }
 

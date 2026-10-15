@@ -9,7 +9,8 @@ import { appConfig } from "./config";
 const chain = chainById(appConfig.chainId);
 
 const transports = {
-  [chain.id]: http(appConfig.rpcUrl),
+  // A 429 from the public RPC should not be retried into a larger burst.
+  [chain.id]: http(appConfig.rpcUrl, { retryCount: 1, retryDelay: 1_500 }),
 };
 
 // Privy owns the connector list. The fallback must not use shimDisconnect:

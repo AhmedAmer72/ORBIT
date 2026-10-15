@@ -1,6 +1,6 @@
 "use client";
 
-import { explorerTxUrl } from "@arcbond/sdk";
+import { explorerTxUrl, isRpcRateLimit, RPC_RATE_LIMIT_MESSAGE } from "@arcbond/sdk";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { usePublicClient } from "wagmi";
@@ -8,9 +8,10 @@ import { usePublicClient } from "wagmi";
 import { ConfigMissing } from "@/components/ConfigMissing";
 import { EmptyState } from "@/components/EmptyState";
 import { PageIntro, Surface } from "@/components/ui";
-import { VaultPicker } from "@/components/VaultPicker";
+import { OpenVaultByAddress, VaultPicker } from "@/components/VaultPicker";
 import { useActiveVault } from "@/hooks/useArcBond";
 import { appConfig } from "@/lib/config";
+import { MAX_LOG_BLOCK_SPAN } from "@/lib/log-ranges";
 import { readVaultActivity } from "@/lib/vault-activity";
 import { configuredChain } from "@/lib/wagmi";
 
@@ -23,20 +24,26 @@ export function ActivityClient() {
   const history = useQuery({
     queryKey: ["activity", vault, appConfig.factoryDeployBlock?.toString()],
     enabled: Boolean(vault && publicClient),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
     queryFn: async () => {
-      if (!vault || !publicClient) return { rows: [], error: undefined as string | undefined };
+      if (!vault || !publicClient) return { rows: [], truncated: false, error: undefined as string | undefined };
       if (appConfig.factoryDeployBlock === undefined) {
-        return { rows: [], error: "Factory deploy block is not configured, so activity cannot bound the log query." };
+        return { rows: [], truncated: false, error: "Factory deploy block is not configured, so activity cannot bound the log query." };
       }
       try {
         const latest = await publicClient.getBlockNumber();
         const fromBlock = appConfig.factoryDeployBlock > latest ? latest : appConfig.factoryDeployBlock;
-        const rows = await readVaultActivity(publicClient, vault, fromBlock, latest);
-        return { rows, error: undefined };
+        const recent = latest - MAX_LOG_BLOCK_SPAN + 1n;
+        const start = recent > fromBlock ? recent : fromBlock;
+        const rows = await readVaultActivity(publicClient, vault, start, latest);
+        return { rows, truncated: start > fromBlock, error: undefined };
       } catch (error) {
         return {
           rows: [],
-          error: error instanceof Error ? error.message : "History unavailable from this RPC.",
+          truncated: false,
+          error: isRpcRateLimit(error) ? RPC_RATE_LIMIT_MESSAGE : error instanceof Error ? error.message : "History unavailable from this RPC.",
         };
       }
     },
@@ -61,8 +68,9 @@ export function ActivityClient() {
     return (
       <div className="space-y-6">
         <PageIntro title="Activity">Successful vault events only.</PageIntro>
-        <EmptyState title="Select a vault">
-          <p>Activity lists only events the RPC returns. Rejected calls do not leave an on-chain event.</p>
+        <EmptyState title="No vault is open">
+          <p>Activity lists events for one vault. Owners see vaults they created. An agent can paste the vault address the owner shared.</p>
+          <OpenVaultByAddress />
         </EmptyState>
       </div>
     );
@@ -76,6 +84,12 @@ export function ActivityClient() {
       </PageIntro>
       <VaultPicker />
       {history.isLoading ? <p className="text-sm text-muted">Querying logs…</p> : null}
+      {history.data?.truncated ? (
+        <p className="text-sm text-muted">
+          Showing the latest {Number(MAX_LOG_BLOCK_SPAN).toLocaleString()} blocks. The public Arc RPC rejects a wider
+          log query.
+        </p>
+      ) : null}
       {history.data?.error ? (
         <EmptyState title="History unavailable">
           <p>{history.data.error}</p>

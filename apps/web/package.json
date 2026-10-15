@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "start": "vite preview",
+    "start": "node ../../scripts/serve-dist.mjs",
     "build": "tsc --noEmit && vite build && node ./scripts/place-dist.mjs",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",

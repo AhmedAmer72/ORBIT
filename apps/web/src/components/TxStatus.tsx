@@ -1,10 +1,31 @@
 import { explorerTxUrl } from "@arcbond/sdk";
+import { useEffect } from "react";
 
+import { useNotify } from "@/components/AppDialog";
 import { appConfig } from "@/lib/config";
 import { configuredChain } from "@/lib/wagmi";
 import type { TxState } from "@/lib/tx";
 
 export function TxStatus({ state }: { state: TxState }) {
+  const notify = useNotify();
+  const failure =
+    state.kind === "rejected" || state.kind === "error" || state.kind === "reverted" || state.kind === "unsent";
+  const detail =
+    state.kind === "rejected"
+      ? state.message
+      : state.kind === "error" || state.kind === "unsent"
+        ? state.message
+        : state.kind === "reverted"
+          ? "The transaction reverted. No vault state changed."
+          : "";
+
+  useEffect(() => {
+    if (!failure || !detail) return;
+    const title =
+      state.kind === "rejected" ? "Request rejected" : state.kind === "reverted" ? "Transaction reverted" : "Something went wrong";
+    notify({ title, body: detail, tone: "danger" });
+  }, [detail, failure, notify, state.kind]);
+
   if (state.kind === "idle") return null;
 
   const hash = "hash" in state ? state.hash : undefined;

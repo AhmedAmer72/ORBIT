@@ -3,6 +3,7 @@ import { Bot, Gauge, Shield, TriangleAlert, Vault } from "lucide-react";
 import { Link } from "react-router-dom";
 import { encodeFunctionData } from "viem";
 
+import { useConfirm } from "@/components/AppDialog";
 import { ConfigMissing } from "@/components/ConfigMissing";
 import { TxStatus } from "@/components/TxStatus";
 import { Surface } from "@/components/ui";
@@ -15,6 +16,7 @@ import { appConfig } from "@/lib/config";
 export function OverviewClient() {
   const { vault, owned, state, factoryConfigured } = useActiveVault();
   const { send, state: tx, writeDisabledReason, address } = useTxWriter();
+  const confirm = useConfirm();
   const snapshot = state.data;
   const isOwner = Boolean(address && snapshot && address.toLowerCase() === snapshot.owner.toLowerCase());
   const now = new Date();
@@ -28,7 +30,12 @@ export function OverviewClient() {
     !factoryConfigured ? { title: "Factory is not configured", detail: "Deploy a factory before vault reads can succeed.", href: "/app/docs", tone: "Action" } : null,
     factoryConfigured && !address ? { title: "Wallet not connected", detail: "Connect the owner wallet to read vaults and send transactions.", href: "/app/vaults", tone: "Action" } : null,
     factoryConfigured && address && !owned.isLoading && !owned.data?.length
-      ? { title: "No vault for this wallet", detail: "Create a clone, then deposit USDC.", href: "/app/vaults", tone: "Action" }
+      ? {
+          title: "No vault for this wallet",
+          detail: "Owners create a vault. Agents open the vault address from the owner on the Agents page.",
+          href: "/app/agents",
+          tone: "Action",
+        }
       : null,
     snapshot?.paused ? { title: "Spending is paused", detail: "executePayment reverts until the owner unpauses.", href: "/app/vaults", tone: "Paused" } : null,
     snapshot && snapshot.agent === ZERO_ADDRESS ? { title: "No agent authorized", detail: "Payments cannot be requested until one agent is set.", href: "/app/agents", tone: "Missing" } : null,
@@ -145,8 +152,16 @@ export function OverviewClient() {
               tone="ghost"
               disabledReason={!vault ? "Select a vault." : !isOwner ? "Only the vault owner can revoke." : writeDisabledReason}
               onClick={() => {
-                if (!vault || !window.confirm("Revoke the current agent? Pending calls from that address will fail.")) return;
-                send(vault, encodeFunctionData({ abi: vaultAbi, functionName: "revokeAgent" }));
+                if (!vault) return;
+                void confirm({
+                  title: "Revoke agent",
+                  body: "Revoke the current agent? Pending payments from that address will fail.",
+                  confirmLabel: "Revoke",
+                  tone: "danger",
+                }).then((accepted) => {
+                  if (!accepted || !vault) return;
+                  void send(vault, encodeFunctionData({ abi: vaultAbi, functionName: "revokeAgent" }));
+                });
               }}
             >
               Revoke agent

@@ -1,9 +1,9 @@
 "use client";
 
-import { formatUsdc, parseUsdc, workspaceAbi, workspaceFactoryAbi } from "@arcbond/sdk";
-import { useState } from "react";
-import { encodeFunctionData, parseEventLogs, type Address } from "viem";
-import { useReadContract } from "wagmi";
+import { erc20Abi, formatUsdc, parseUsdc, workspaceAbi, workspaceFactoryAbi } from "@arcbond/sdk";
+import { useEffect, useState } from "react";
+import { encodeFunctionData, isAddress, parseEventLogs, type Address } from "viem";
+import { usePublicClient, useReadContract, useWalletClient } from "wagmi";
 
 import { EmptyState } from "@/components/EmptyState";
 import { TxStatus } from "@/components/TxStatus";
@@ -11,6 +11,7 @@ import { Field, PageIntro, Surface, TextInput } from "@/components/ui";
 import { WriteButton } from "@/components/WriteButton";
 import { useTxWriter } from "@/hooks/useTx";
 import { appConfig } from "@/lib/config";
+import { submitPreparedWrite, type TxState } from "@/lib/tx";
 import { configuredChain } from "@/lib/wagmi";
 
 const namesKey = "arcbond.workspaceNames";
@@ -43,8 +44,15 @@ export function WorkspacesClient() {
   const [expiry, setExpiry] = useState("");
   const [recipient, setRecipient] = useState("");
   const [names, setNames] = useState<Record<string, string>>(() => (typeof localStorage === "undefined" ? {} : readNames()));
+  const [notice, setNotice] = useState<string | null>(null);
+  const [fund, setFund] = useState("1");
+  const [funding, setFunding] = useState<TxState>({ kind: "idle" });
+  const publicClient = usePublicClient({ chainId: configuredChain.id });
+  const { data: walletClient } = useWalletClient();
 
   const workspace = (selected || addresses?.[0] || "") as Address | "";
+  const recipientAddress = isAddress(recipient) ? recipient : undefined;
+  const agentAddress = isAddress(agent) ? agent : undefined;
   const stats = useReadContract({
     chainId: configuredChain.id,
     address: workspace || undefined,
@@ -73,6 +81,27 @@ export function WorkspacesClient() {
     functionName: "workspacePeriodLimit",
     query: { enabled: Boolean(workspace) },
   });
+  const providerApproval = useReadContract({
+    chainId: configuredChain.id,
+    address: workspace || undefined,
+    abi: workspaceAbi,
+    functionName: "approvedRecipients",
+    args: recipientAddress ? [recipientAddress] : undefined,
+    query: { enabled: Boolean(workspace && recipientAddress) },
+  });
+  const agentConfig = useReadContract({
+    chainId: configuredChain.id,
+    address: workspace || undefined,
+    abi: workspaceAbi,
+    functionName: "agents",
+    args: agentAddress ? [agentAddress] : undefined,
+    query: { enabled: Boolean(workspace && agentAddress) },
+  });
+
+  useEffect(() => {
+    if (!workspace) return;
+    setName(readNames()[workspace.toLowerCase()] ?? "");
+  }, [workspace]);
 
   if (!factory) {
     return (
@@ -96,7 +125,61 @@ export function WorkspacesClient() {
     const created = parseEventLogs({ abi: workspaceFactoryAbi, logs: result.logs, eventName: "WorkspaceCreated" });
     const next = created[0]?.args.workspace;
     if (next) setSelected(next);
+    setNotice(
+      next
+        ? `Workspace ${next} is created. This page stays open because setup is not finished. Deposit USDC, set a shared cap above zero, approve a provider, and authorize an agent before anyone can spend.`
+        : "Workspace created. This page stays open. The new contract appears in the list after the factory read refreshes.",
+    );
     await refetch();
+  }
+
+  async function refreshWorkspace() {
+    await Promise.all([
+      stats.refetch(),
+      spent.refetch(),
+      reserved.refetch(),
+      cap.refetch(),
+      providerApproval.refetch(),
+      agentConfig.refetch(),
+    ]);
+  }
+
+  async function sendWorkspace(data: ReturnType<typeof encodeFunctionData>) {
+    if (!workspace) return;
+    const result = await writer.send(workspace, data);
+    if (result.kind === "success") await refreshWorkspace();
+  }
+
+  async function deposit() {
+    if (!workspace || !writer.address || !publicClient || !walletClient) return;
+    let parsed: bigint;
+    try {
+      parsed = parseUsdc(fund);
+    } catch {
+      setFunding({ kind: "error", message: "Enter a USDC amount using 6-decimal units, for example 1.25." });
+      return;
+    }
+    setFunding({ kind: "simulating" });
+    const approve = await submitPreparedWrite({
+      publicClient,
+      walletClient,
+      account: writer.address,
+      address: appConfig.usdc,
+      data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [workspace, parsed] }),
+    });
+    if (approve.kind !== "success") {
+      setFunding(approve);
+      return;
+    }
+    const deposited = await submitPreparedWrite({
+      publicClient,
+      walletClient,
+      account: writer.address,
+      address: workspace,
+      data: encodeFunctionData({ abi: workspaceAbi, functionName: "deposit", args: [parsed] }),
+    });
+    setFunding(deposited);
+    if (deposited.kind === "success") await refreshWorkspace();
   }
 
   function saveName() {
@@ -111,13 +194,14 @@ export function WorkspacesClient() {
   return (
     <div className="space-y-6">
       <PageIntro title="Workspaces">
-        The shared cap, reservations, and agent limits are stored on the workspace contract. A display name is saved only
-        in this browser.
+        Creating a workspace deploys an empty contract and keeps you on this page. The shared cap, the USDC balance, the
+        provider allowlist, and each agent limit are what make it able to pay. A display name is saved only in this browser.
       </PageIntro>
       <WriteButton disabledReason={writer.writeDisabledReason} onClick={() => void createWorkspace()}>
         Create workspace
       </WriteButton>
       <TxStatus state={writer.state} />
+      {notice ? <p className="rounded-2xl border border-ok/40 bg-ok/10 px-4 py-3 text-sm text-ok">{notice}</p> : null}
       {addresses?.length ? (
         <Surface className="space-y-3">
           <Field label="Workspace">
@@ -134,11 +218,26 @@ export function WorkspacesClient() {
               ))}
             </select>
           </Field>
+          <WorkspaceReadiness
+            cap={cap.data}
+            available={stats.data}
+            provider={recipientAddress ? providerApproval.data : undefined}
+            providerKnown={Boolean(recipientAddress)}
+            agentActive={agentAddress && agentConfig.data ? agentConfig.data[0] : undefined}
+            agentKnown={Boolean(agentAddress)}
+          />
           <p className="text-sm text-muted">
             On-chain available {stats.data === undefined ? "…" : `${formatUsdc(stats.data)} USDC`}. Reserved{" "}
             {reserved.data === undefined ? "…" : formatUsdc(reserved.data)}. Spent this UTC day{" "}
             {spent.data === undefined ? "…" : formatUsdc(spent.data)} of {cap.data === undefined ? "…" : formatUsdc(cap.data)}.
           </p>
+          <Field label="Deposit USDC">
+            <TextInput value={fund} onChange={(event) => setFund(event.target.value)} />
+          </Field>
+          <WriteButton disabledReason={writer.writeDisabledReason} onClick={() => void deposit()}>
+            Approve and deposit
+          </WriteButton>
+          <TxStatus state={funding} />
           <Field label="Local name (not enforced on-chain)">
             <TextInput value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
@@ -159,8 +258,7 @@ export function WorkspacesClient() {
           <WriteButton
             disabledReason={writer.writeDisabledReason}
             onClick={() =>
-              writer.send(
-                workspace,
+              void sendWorkspace(
                 encodeFunctionData({
                   abi: workspaceAbi,
                   functionName: "setWorkspacePeriodLimit",
@@ -177,8 +275,7 @@ export function WorkspacesClient() {
           <WriteButton
             disabledReason={writer.writeDisabledReason}
             onClick={() =>
-              writer.send(
-                workspace,
+              void sendWorkspace(
                 encodeFunctionData({
                   abi: workspaceAbi,
                   functionName: "setRecipient",
@@ -207,8 +304,7 @@ export function WorkspacesClient() {
             <WriteButton
               disabledReason={writer.writeDisabledReason}
               onClick={() =>
-                writer.send(
-                  workspace,
+                void sendWorkspace(
                   encodeFunctionData({
                     abi: workspaceAbi,
                     functionName: "authorizeAgent",
@@ -223,7 +319,7 @@ export function WorkspacesClient() {
               tone="ghost"
               disabledReason={writer.writeDisabledReason}
               onClick={() =>
-                writer.send(workspace, encodeFunctionData({ abi: workspaceAbi, functionName: "revokeAgent", args: [agent as Address] }))
+                void sendWorkspace(encodeFunctionData({ abi: workspaceAbi, functionName: "revokeAgent", args: [agent as Address] }))
               }
             >
               Revoke agent
@@ -231,13 +327,90 @@ export function WorkspacesClient() {
             <WriteButton
               tone="ghost"
               disabledReason={writer.writeDisabledReason}
-              onClick={() => writer.send(workspace, encodeFunctionData({ abi: workspaceAbi, functionName: "pause" }))}
+              onClick={() => void sendWorkspace(encodeFunctionData({ abi: workspaceAbi, functionName: "pause" }))}
             >
               Pause spending
             </WriteButton>
           </div>
         </Surface>
       ) : null}
+    </div>
+  );
+}
+
+function WorkspaceReadiness({
+  cap,
+  available,
+  provider,
+  providerKnown,
+  agentActive,
+  agentKnown,
+}: {
+  cap: bigint | undefined;
+  available: bigint | undefined;
+  provider: boolean | undefined;
+  providerKnown: boolean;
+  agentActive: boolean | undefined;
+  agentKnown: boolean;
+}) {
+  const items = [
+    {
+      label: "Shared daily cap",
+      state: cap === undefined ? "checking" : cap > 0n ? "ready" : "missing",
+      detail:
+        cap === undefined
+          ? "Reading the cap from the contract."
+          : cap > 0n
+            ? `${formatUsdc(cap)} USDC can be spent per UTC day.`
+            : "Set a cap below. Zero rejects every payment.",
+    },
+    {
+      label: "USDC deposited",
+      state: available === undefined ? "checking" : available > 0n ? "ready" : "missing",
+      detail:
+        available === undefined
+          ? "Reading the balance."
+          : available > 0n
+            ? `${formatUsdc(available)} USDC is available to spend.`
+            : "Balance is 0. Deposit USDC on this page before a payment or session can succeed.",
+    },
+    {
+      label: "Provider allowlist",
+      state: !providerKnown || provider === undefined ? (providerKnown ? "checking" : "missing") : provider ? "ready" : "missing",
+      detail: !providerKnown
+        ? "Enter a provider below and approve it. An empty allowlist rejects every payment."
+        : provider
+          ? "The provider in the field below is approved."
+          : "The provider in the field below is not approved yet.",
+    },
+    {
+      label: "Agent",
+      state: !agentKnown || agentActive === undefined ? (agentKnown ? "checking" : "missing") : agentActive ? "ready" : "missing",
+      detail: !agentKnown
+        ? "Enter an agent below and authorize it. Until then this workspace cannot pay."
+        : agentActive
+          ? "The agent in the field below is authorized."
+          : "The agent in the field below is not authorized yet.",
+    },
+  ] as const;
+
+  return (
+    <div className="rounded-2xl border border-line bg-ink/40 p-4">
+      <p className="text-sm font-medium text-paper">Setup stays on this page</p>
+      <p className="mt-1 text-sm text-muted">
+        A confirmed create does not fund this contract or authorize anyone. Spending stays closed until every line says ready.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {items.map((item) => (
+          <li key={item.label} className="text-sm">
+            <span className={item.state === "ready" ? "text-ok" : item.state === "missing" ? "text-danger" : "text-muted"}>
+              {item.state === "ready" ? "Ready" : item.state === "missing" ? "Missing" : "Checking"}
+            </span>
+            <span className="text-paper"> · {item.label}. </span>
+            <span className="text-muted">{item.detail}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

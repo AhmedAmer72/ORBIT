@@ -11,8 +11,8 @@ type Stored = {
   seenFacts: string[];
 };
 
-const port = Number(process.env.PORT ?? process.env.GUARDIAN_PORT ?? 8788);
-const host = process.env.GUARDIAN_HOST ?? (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+const port = Number(process.env.PORT) || Number(process.env.GUARDIAN_PORT) || 8788;
+const host = process.env.PORT ? "0.0.0.0" : (process.env.GUARDIAN_HOST ?? "127.0.0.1");
 const rpcUrl = process.env.GUARDIAN_RPC_URL ?? process.env.PAY_RPC_URL ?? "https://rpc.testnet.arc.io";
 const chainId = Number(process.env.GUARDIAN_CHAIN_ID ?? process.env.PAY_CHAIN_ID ?? 5042002);
 const fromBlock = BigInt(process.env.GUARDIAN_FROM_BLOCK ?? process.env.PAY_START_BLOCK ?? 0);
